@@ -1,0 +1,59 @@
+\documentclass[DM,authoryear,toc]{lsstdoc}
+% lsstdoc documentation: https://lsst-texmf.lsst.io/lsstdoc.html
+
+\input{meta}
+
+% Package imports go here.
+
+% Local commands go here.
+
+% To add a short-form title:
+% \title[Short title]{Title}
+\title{Review of Timeseries Features}
+
+% Optional subtitle
+% \setDocSubtitle{A subtitle}
+
+\author{%
+Eric Bellm
+}
+
+\setDocRef{DMTN-118}
+\setDocUpstreamLocation{\url{https://github.com/lsst-dm/dmtn-118}}
+
+\date{\vcsDate}
+
+% Optional: name of the document's curator
+% \setDocCurator{The Curator of this Document}
+
+\setDocAbstract{%
+The DPDD allocates space for pre-computed timeseries features, and a sample set is baselined in LDM-151. However, other features have been developed. This technote reviews the relevant literature, grouping related features where possible, and discusses potential concerns.
+}
+
+% Change history defined here.
+% Order: oldest first.
+% Fields: VERSION, DATE, DESCRIPTION, OWNER NAME.
+% See LPM-51 for version number policy.
+\setDocChangeRecord{%
+  \addtohist{1}{YYYY-MM-DD}{Unreleased.}{Eric Bellm}
+}
+
+\begin{document}
+
+% Create the title page.
+\maketitle
+
+% ADD CONTENT HERE
+% You can also use the \input command to include several content files.
+
+\appendix
+% Include all the relevant bib files.
+% https://lsst-texmf.lsst.io/lsstdoc.html#bibliographies
+\section{References} \label{sec:bib}
+\bibliography{local,lsst,lsst-dm,refs_ads,refs,books}
+
+% Make sure lsst-texmf/bin/generateAcronyms.py is in your path
+\section{Acronyms} \label{sec:acronyms}
+\input{acronyms.tex}
+
+\end{document}

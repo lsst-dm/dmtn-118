@@ -1,7 +1,7 @@
 .. image:: https://img.shields.io/badge/dmtn--118-lsst.io-brightgreen.svg
    :target: https://dmtn-118.lsst.io
-.. image:: https://travis-ci.com/lsst-dm/dmtn-118.svg
-   :target: https://travis-ci.com/lsst-dm/dmtn-118
+.. image:: https://github.com/lsst-dm/dmtn-118/workflows/CI/badge.svg
+   :target: https://github.com/lsst-dm/dmtn-118/actions/
 
 #############################
 Review of Timeseries Features

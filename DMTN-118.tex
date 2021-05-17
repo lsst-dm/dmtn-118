@@ -532,6 +532,9 @@ When a new \DIAObject is identified in AP, it will only have one \DIASource.
 Even basic statistics like the mean require 2--3 points to provide information, and more complex features like period finding need tens of epochs.
 Since many false positives will only have a few detections, omitting them from feature computation would provide savings.
 
+We propose to empirically determine the minimum numbers of \DIASources required to obtain meaningful results for various features.
+Features not computed will have values set to \texttt{NULL}.
+
 \subsubsection{Period finding}
 
 The LSST main survey has 825 fiducial visits per pointing, divided among six bands.  

@@ -4,6 +4,7 @@
 \input{meta}
 
 % Package imports go here.
+\usepackage{csquotes}
 
 % Local commands go here.
 
@@ -15,7 +16,7 @@
 % \setDocSubtitle{A subtitle}
 
 \author{%
-Eric Bellm
+Eric C.\ Bellm
 }
 
 \setDocRef{DMTN-118}
@@ -27,7 +28,10 @@ Eric Bellm
 % \setDocCurator{The Curator of this Document}
 
 \setDocAbstract{%
-The DPDD allocates space for pre-computed timeseries features, and a sample set is baselined in LDM-151. However, other features have been developed. This technote reviews the relevant literature, grouping related features where possible, and discusses potential concerns.
+Rubin Observatory will compute timeseries variability features on lightcurves to aid users in identifying objects of interest, both during realtime Alert Production as well as in the annual Data Releases.
+The Data Products Definition Document (DPDD; \citeds{LSE-163}) allocates space for pre-computed timeseries features, and a sample set is baselined in \citeds{LDM-151}. 
+However, in the subsequent decade the scientfic community has made a great deal of further progress in this area.
+This technote reviews the relevant literature, grouping related features where possible; discusses potential concerns and open questions; and proposes a new baseline feature set.
 }
 
 % Change history defined here.
@@ -35,7 +39,7 @@ The DPDD allocates space for pre-computed timeseries features, and a sample set 
 % Fields: VERSION, DATE, DESCRIPTION, OWNER NAME.
 % See LPM-51 for version number policy.
 \setDocChangeRecord{%
-  \addtohist{1}{YYYY-MM-DD}{Unreleased.}{Eric Bellm}
+  \addtohist{1}{2021-05-28}{Initial release.}{Eric Bellm}
 }
 
 \begin{document}
@@ -45,6 +49,684 @@ The DPDD allocates space for pre-computed timeseries features, and a sample set 
 
 % ADD CONTENT HERE
 % You can also use the \input command to include several content files.
+
+\section{Current Baseline}
+
+Table 2 of the \DPDD{} allocates space in both of the \DIAObject and \Object tables for a total of 6 bands $\times$ (32 periodic $+$ 20 nonperiodic) features $=$ 312 floats.
+The baseline described in \citeds{LDM-151} \S 6.21 is that these features are taken directly from Tables 4 \& 5 of \citet{2011ApJ...733...10R}.
+We reproduce the text of this section from \DPDD v4.2 below:
+
+\begin{displayquote}
+All of these metrics are calculated for both \Objects (\DPDD{} table 4, \texttt{lcPeriodic} and \texttt{lcNonPeriodic}) and \DIAObjects (\DPDD{} table 2, \texttt{lcPeriodic} and \texttt{lcNonPeriodic}). They are calculated and recorded separately in each band. Calculations for \Objects are performed based on forced point source model fits (\DPDD{} table 5, \texttt{psFlux}).  Calculations for \DIAObjects are performed based on point source model fits to \DIASources (\DPDD{} table 1, \texttt{psFlux}). In each case, calculation requires the fluxes and errors for all of the sources in the lightcurve to be available in memory simultaneously.
+
+
+\subsection{Characterization of Periodic Variability}
+
+\begin{itemize}
+
+\item{Characterize lightcurve as the sum of a linear term plus sinusoids at three fundamental frequencies plus four harmonics:
+\begin{align}
+y(t) &= ct + \sum_{i=1}^{3} \sum_{j=1}^{4} y_i(t|j f_i) \\
+y_i(t|j f_i) &= a_{i,j} \sin(2 \pi j f_i t) + b_{i, j} \cos(2 \pi j f_i t) + b_{i, j, 0}
+\end{align}
+where $i$ sums over fundamentals and $j$ over harmonics.
+}
+\item{Use iterative application of the generalized Lomb-Scargle periodogram, as described in \cite{2011ApJ...733...10R}, to establish the fundamental frequencies, $f_1$, $f_2$, $f_3$:
+\begin{itemize}
+  \item{Search a configurable (minimum, maximum, step) linear frequency grid with the periodogram, applying a $\log f/f_N$ penalty for frequencies above $f_N = 0.5 \langle 1 / \Delta T \rangle$, identifying the frequency $f_1$ with highest power;}
+  \item{Fit and subtract that frequency and its harmonics from the lightcurve;}
+  \item{Repeat the periodogram search to identify $f_2$ and $f_3$.}
+\end{itemize}
+}
+\item{We report a total of 32 floats:
+  \begin{itemize}
+  \item{The linear coefficient, $c$ (1 float)}
+  \item{The values of $f_1$, $f_2$, $f_3$. (3 floats)}
+  \item{The amplitude, $\mathrm{A}_{i, j} = \sqrt{a_{i, j}^2 + b_{i, j}^2}$, for each $i, j$ pair. (12 floats)}
+  \item{The phase, $\mathrm{PH}_{i, j} = \arctan(b_{i, j}, a_{i, j}) - \frac{j f_i}{f_1} \arctan(b_{1,1}, a_{1,1})$, for each $i, j$ pair, setting $\mathrm{PH}_{1, 1} = 0$. (12 floats)}
+  \item{The significance of $f_1$ vs. the null hypothesis of white noise with no periodic signal. (1 float)}
+  \item{The ratio of the significance of each of $f_2$ and $f_3$ to the significance of $f_1$. (2 floats)}
+  \item{The ratio of the variance of the lightcurve before subtraction of the $f_1$ component to its variance after subtraction. (1 float)}
+  \end{itemize}
+NB the \DPDD{} baselines providing 32 floats, but, since $\mathrm{PH}_{1,1}$ is 0 by construction, in practice only 31 need to be stored.
+}
+\end{itemize}
+
+\subsection{Characterization of Aperiodic Variability}
+
+In addition to the periodic variability described above, we follow \cite{2011ApJ...733...10R} in providing a series of statistics computed from the lightcurve which do not assume peridoicity. They define 20 floating point quantities in four groups which we describe here, again with the caveat that future revisions to the \DPDD{} may require changes to this list.
+
+Basic quantities:
+
+\begin{itemize}
+\item{The maximum value of delta-magnitude over delta-time between successive points in the lightcurve.}
+\item{The difference between the maximum and minimum magnitudes.}
+\item{The median absolute deviation.}
+\item{The fraction of measurements falling within $1/10$ amplitudes of the median.}
+\item{The ``slope trend'': the fraction of increasing minus the fraction of decreasing delta-magnitude values between successive pairs of the last 30 points in the lightcurve.}
+\end{itemize}
+
+Moment calculations:
+
+\begin{itemize}
+\item{Skewness.}
+\item{Small sample kurtosis, i.e.
+\begin{align}
+\mathrm{Kurtosis} &= \frac{n(n+1)}{(n-1)(n-2)(n-3)} \sum_{i=1}^{n} \left(\frac{x_i - \overline{x}}{s}\right)^4 -\frac{3(n-1)^2}{(n-2)(n-3)} \\
+s &= \sqrt{\frac{1}{n-1} \sum_{i=1}^{n}(x_i - \overline{x})^2}
+\end{align}
+}
+\item{Standard deviation.}
+\item{The fraction of magnitudes which lie more than one standard deviation from the weighted mean.}
+\item{Welch-Stetson variability index $J$ \cite{1996PASP..108..851S}, defined as
+\[
+J = \frac{\sum_{k} \mathrm{sgn}(P_k) \sqrt{|P_k|}}{K},
+\]
+where the sum runs over all $K$ pairs of observations of the object, where $\mathrm{sgn}$ returns the sign of its argument, and where
+\begin{align}
+P_k &= \delta_i \delta_j \\
+\delta_i &= \sqrt{\frac{n}{n-1}}\frac{\nu_i - \overline{\nu}}{\sigma_{\nu}},
+\end{align}
+where $n$ is the number of observations of the object, and $\nu_i$ its flux in observation $i$. Following the procedure described in Stetson \cite{1996PASP..108..851S}, the mean is not the simple weighted algebraic mean, but is rather reweighted to account for outliers.}
+\item{Welch-Stetson variability index $K$ \cite{1996PASP..108..851S}, defined as
+\[
+K = \frac{1/n \sum_{i=1}{N}|\delta_i|}{\sqrt{1/n \sum_{i=1}{N}|\delta_i^2|}},
+\]
+where $N$ is the total number of observations of the object and $\delta_i$ is defined as above.}
+\end{itemize}
+
+Percentiles. Taking, for example, $F_{5,95}$ to be the difference between the $95\%$ and $5\%$ flux values, we report:
+
+\begin{itemize}
+\item{All of $F_{40,60} / F_{5,95}$, $F_{32.5,67.5} / F_{5,95}$, $F_{25,75} / F_{5,95}$, $F_{17.5,82.5} / F_{5,95}$, $F_{10,90} / F_{5,95}$}
+\item{The largest absolute departure from the median flux, divided by the
+median.}
+\item{The ratio of $F_{5,95}$ to the median.}
+\end{itemize}
+
+QSO similarity metrics, as defined by Butler \& Bloom \cite{2011AJ....141...93B}:
+
+\begin{itemize}
+\item{$\chi_{\mathrm{QSO}}^2 / \nu$.}
+\item{$\chi_{\mathrm{False}}^2 / \nu$.}
+\end{itemize}
+
+
+\end{displayquote}
+
+
+
+\section{Motivations for updates to the current baseline}
+
+Both the \DPDD and \citeds{LDM-151} are clear that the baselined features are provisional and will be updated.  
+Here we briefly review some motivations for doing so now.
+
+First, the \citet{2011ApJ...733...10R} features are now a decade old, and there has been great progress in the field since, with many new classification efforts run on larger and deeper surveys.
+It is reasonable to review these efforts and distill any new findings.
+Also, while training machine-learned models on features extracted from the lightcurves remains a popular approach, classification using deep neural nets run directly on lightcurves or their proxies have begun to appear \citep[e.g.,][]{Mahabal:17:DLClassification,Naul:18:RNNClassifier,Muthukrishna:19:RAPIDClassification}.
+What is the appropriate role of LSST-computed features in this rapidly-evolving landscape?
+
+It is also worth noting the ways in which the \citet{2011ApJ...733...10R} study differs from the LSST application.
+That classification was based on a retrospective analysis of single-band OGLE and \textit{Hipparcos} data, with a particular focus on variable stars.
+In contrast LSST is a much deeper multi-band survey and will accordingly identify a broader range of classes of astrophysical transients and variables, not all of which will be well-characterized by the baseline feature set.
+Moreover, features will be calculated and disseminated in alerts in near-real time to aid rapid classification and followup of important events. 
+
+Finally we raise the issue of intepretability, which we discuss further in \S \ref{sec:interpretability}.
+The features computed in \citet{2011ApJ...733...10R} were intended primarily as inputs into a machine learning classifier.
+Because the LSST project will not perform scientific classification, however, its timeseries features will be a major way scientists will attempt to identify interesting objects within its data.
+Additionally, the random forest classifier employed by \citet{2011ApJ...733...10R} readily discards irrelevant features, so there was little incentive to remove redundant or duplicative features.
+In contrast the number of LSST features is tightly constrained given the scale of the catalogs.
+
+In sum, these considerations motivate us to look for a set of timeseries features that are orthogonal, interpretable, and span the space of time-domain science LSST data can enable.
+
+\section{Other Timeseries Features in the Literature}
+
+In this section we review a range of other timeseries features that have been used in the literature.
+While it is impossible for this list to be exhaustive we have attempted to review the papers for major classification efforts and packages.
+These included classification of ASAS \citep{Richards:12:ASASCatalog}, ASAS-SN \citep{Jayasinghe:18:ASASSNVarsI,Jayasinghe:19:ASASSNVarsII,Jayasinghe:19:ASASSNVarsIII,Jayasinghe:20:ASASSNVarsV}, PS1\citep{Hernitschek:16:PS1SF, Villar:20:SuperRAENN}, HiTS \citep{Martinez-Palomera:18:HiTS}, VVV \citep{Elorrieta:16:A-machine-learn}, SNPhotCC \citep{Kessler:10:SNPhotCC}, the ANTARES broker \citep{Narayan:18:ANTARES}, the PLAsTiCC challenge \citep{Malz:19:PLAsTiCC,Kessler:19:PlasticcModels, Boone:19:AvocadoClassifier}, OGLE \citep{Pashchenko:18:OGLEClassification}, and ZTF \citep{Sanchez-Saez:21:AlertClassification, tmp_Coughlin:20:ZTFClassification}. 
+We also reviewed existing packages for featurizing lightcurves, including \texttt{VARTOOLS} \citep{Hartman:16:VARTOOLS}, \texttt{FATS} \citep{Nun:15:FATS}, \texttt{cesium}\footnote{\url{http://cesium-ml.org/}}, \texttt{UPSILoN} \citep{Kim:16:UPSILoN}, \texttt{VaST} \citep{Sokolovsky:18:VaST}, \texttt{astrobase}\footnote{\url{https://astrobase.readthedocs.io}} and \texttt{tsfresh}\footnote{\url{https://tsfresh.readthedocs.io/}}.
+
+We attempt to combine related or redundant expressions of the same calculations below.
+\citet{Graham:17:VariableClassificationChallenges} provides a useful taxonomy of features, suggesting that they may characterize location, scale, variability, morphology, timescales, trends, or agreement with a model. 
+\citet{Sokolovsky:17:VariabilityDetection} and \citet{Pashchenko:18:OGLEClassification} assess features in the context of determining whether or not a source is variable and note the large degree of covariance among commonly-used metrics.
+
+
+
+
+\subsection{Characterization of Periodic Variability}
+
+A wide variety of period-finding algorithms have been explored in the literature. 
+These include model-based methods based on the Discrete Fourier Transform \citep[especially the Lomb-Scargle Periodogram and variants;][]{Lomb:76:Least-Squares-F, Scargle:82:Studies-in-astr,Zechmeister:09:GeneralisedLS,VanderPlas:18:UnderstandingLS}; 
+phase-folding methods minimizing various scatter measures given a trial period \citep[e.g.,][]{Stellingwerf:78:PDM,Dworetsky:83:StringLength,Schwarzenberg-Czerny:89:AOV,Clarke:02:StringLength,Zucker:16:SerialIndependence}; 
+entropy-based methods \citep[e.g.,]{Cincotta:95:Astronomical-Ti,Cincotta:99:Astronomical-ti,Huijse:12:CorrentropyPeriodogram, Graham:13:ConditionalEntropy}; 
+and Bayesian appraoches \citep[e.g.,][]{Gregory:92:A-New-Method-fo,Wang:12:NonpBayesPeriods}.
+Searches for transiting exoplanets typically use the Box Least Squares (BLS) algorithm \citep{Kovacs:02:BoxLS} and variants \citep[e.g.,][]{Heller:19:TransitLS}, which fit a narrow transit signal at a variety of trial periods.
+
+In a review, \citet{Graham:13:PeriodFindingComparison} report that no single period-finding method is optimal for all classes of periodic object.
+This suggests that our selection of period finding algorithm(s) should be guided by practical concerns.
+For LSST, these include the need to provide effective periods and lightcurve characterization for a wide range of astrophysical objects; the need for rapid execution in order to fit within the 60\,sec alert latency budget; and the need to fit LSST's temporally sparse multi-band data.
+
+\subsubsection{Multiple Harmonics, Multiple Frequencies}
+
+Since most variable stars do not have simple sinusoidal lightcurves, authors using Lomb-Scargle period fitting often utilize multi-harmonic and/or multi-frequency models to better fit the lightcurves.
+The amplitudes and phases of the multiple components help discriminate between classes of variables \citep[e.g.,][]{Selam:04:WUMa}.
+We describe a subset below.
+
+\citet{Richards:12:ASASCatalog} use a three frequencies and regularized multiple harmonics, using per-lightcurve cross-validation to determine the regularization parameter.
+Ratios of these frequencies are included as features along with the regularization parameter.
+\citet{Dubath:11:VariableClassification} instead use a hypothesis-testing approach to determine whether additional harmonics are justified\footnote{Although due to boundary-value problems this use of the F-test is uncalibrated: see \citet{Protassov:02:LRTest}.}.
+A similar procedure is used by other authors \citep[e.g.,][]{Drake:13:CSSRRLyr,Torrealba:15:SouthCSSRRLyr} under the name ``Adaptive Fourier Decomposition''.
+
+Simulation and empirical validation will be necessary to determine the number of frequencies and harmonics which may be meaningfully constrained given the sampling provided by typical LSST cadences in one year.
+
+
+\subsubsection{Multiple bands}
+
+Most period fitting conducted in the literature has been performed on survey data taken in one or a small handful of photometric bands.
+Period fitting accuracy tends to decrease when the number of epochs is smaller than a few tens of data points.
+LSST will have about 80 epochs yearly divided over six bands for most Wide-Fast-Deep fields; this is too small for effective period fitting in any one band.
+
+Accordingly, several authors have extended the period finding techniques described above to use data in multiple bandpasses simultaneously during period fitting.
+These include multi-band Lomb Scargle \citep{VanderPlas:15:MultibandLS}, multi-band Analysis of Variance \citep{Mondrik:15:MultibandAOV}, multi-band Mutual Information \citep{Huijse:18:MultibandMI}, as well as hybrid approaches \citep{Saha:17:A-Hybrid-Algori}.
+Template fitting approaches for specific object types such as RR Lyrae can naturally conducted in multiple bands \citep[e.g.,][]{Stringer:19:DESRRLyr}.
+
+\subsubsection{Calculations on the Phase-folded lightcurve}
+
+\citet{Richards:12:ASASCatalog} includes features that take the differences in the Lomb-Scargle lightcurve model maxima and minima to detect eclipsing binaries.
+They also calculate the phase differences between the maxima and minima and the 10th and 90th percentile model slopes, the number of frequencies consistent with 1-day aliases, and whether the ratio of frequencies is consistent with double-mode RR Lyrae.
+\citet{Long:12:OptimizingVarClass} also calculates the same 10th and 90th percentile slopes for the lightcurve after doubling the best-fit period, and adds additional frequency and amplitude ratios.
+
+\citet{Dubath:11:VariableClassification}  compute several scatter measures in both time and phase space, some that strictly use data values and some that are calculated on residuals from the periodic model fit.
+These include median differences of consecutive values in both the time- and phase-orded lightcurves;.
+They also compute the mean squared residuals on the time ordered lightcurve, the phased lightcurve, and the phased lightcurve folded at twice the period.
+In total there are seven scatter measures with various normalizations.
+In their classifier, the most valuable of these scatter features is the MAD of the residuals divided by the MAD of the raw light curve.
+
+\citet{Kim:14:The-EPOCH-Proje} calculated von Neumann ratios and range of cumulative sum on the phase-folded lightcurve (\S \ref{sec:other-stats}).
+
+\citet{Jayasinghe:19:ASASSNVarsIII} computes the Lafler-Kinman string-length statistic on both the phased and temporal lightcurves as well as the normalized difference between the two lengths.
+
+
+%e.g., ellc; VARTOOLS implements JKTEBOP spot models
+%from \citet{Marsh:17:WUMa} for double-peaked lcs, differences in maxima, differences in minima (using model fit, or spline/nonparametric)
+
+\subsubsection{Nonstationarity}
+
+Some of the most interesting sources LSST finds will be those with periods that change over LSST's ten-year survey.
+$\dot{P}$ searches are straighforward but too computationally expensive to contemplate at scale.
+We suggest that identifying candidates to perform such searches on be left to user-generated processing.
+
+Similarly, some sources will show periodic behavior only after detrending long-term variability or by windowing to remove other sources of variation.  
+These specialized analyses are also beyond the scope of routine processing.
+
+\subsubsection{Quality Control}
+
+Reliable period determination is vital but challenging: uneven sampling, sensitivity to the choice of frequency grid, outliers, non-stationary processes, and frequency-dependent noise properties can all yield spurious periodicities.
+
+It is desirable to have a measure of the probability that the computed period is a false alarm:  that is, how likely is it that a non-periodic source would yield the observed periodogram peak?
+While the Lomb-Scargle periodogram provides an analytic False Alarm Probability (FAP) of a peak at a \textit{given} frequency \citep{Scargle:82:Studies-in-astr} this is not the relevant FAP of a finding a spurious peak at \textit{any} frequency \citep[and references therein]{VanderPlas:18:UnderstandingLS}.
+Improved analytic estimates for the FAP over all frequencies under certain limits \citep{Baluev:08:FAP}, but better constraints typically require computationally expensive bootstrap resampling \citep[e.g.,][]{Ivezic:14:MLBook}, although use of extreme-value statistics can reduce the number of required bootstrap evaluations \citep{Suveges:12:FAP}.
+Recent work \citep{Delisle:20:LSFAPCorrelatedNoise} extends analytic FAP estimates to handle the astrophysically-common case of temporally-correlated variability.
+
+However, the FAP does not tell us whether the identified period is correct.
+Often the highest periodogram peak is a fraction or multiple of the true period, particularly for eclipsing binaries with double-peaked lightcurves.
+\citet{Dubath:11:VariableClassification} provides several empirical measures to assess period quality, including the largest phase gap in the folded lightcurve and MAD and percentile values of the scatter of the residuals about the lightcurve phased at the Lomb-Scargle period as well as twice its value.  
+These are also adopted by \citep{Richards:12:ASASCatalog}. 
+\citet{Sanchez-Saez:21:AlertClassification} computes a ``periodogram pseudo-entropy'' from peaks in the periodogram as well as power ratios of the selected period and ratios thereof.
+
+
+Given that no single period-finding method is optimal for all classes of sources \citep{Graham:13:PeriodFindingComparison}, it would be valuable to report periods derived from multiple period-finding algorithms.
+However, this may not be computationally feasible, particularly within the required 60\,sec alert production latency.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsection{Characterization of Aperiodic Variability}
+
+\subsubsection{Amplitudes and Percentiles}
+
+A wide variety of combinations and scalings of percentile amplitudes are reported in the literature.
+For example, \citet{Kinemuchi:06:RRLyrNSVS} uses a magnitude ratio of (max$-$median) / (max$-$min)), sometimes known as the ``M-test statistic.''
+\citet{Kim:16:UPSILoN} calculates the difference of the 75\% and 25\% values (the inter-quartile range).
+
+
+We suggest it may be more expedient to simply report the raw flux percentiles per band and let users construct differences and ratios as desired, rather than using the complex set of normalized difference ratios defined in \citet{2011ApJ...733...10R} and \citeds{LDM-151}.
+
+\subsubsection{Other Statistics} \label{sec:other-stats}
+
+Some commmonly-computed statistics include reduced $\chi^2$ for a constant model: 
+\begin{equation}
+\chi^{2} / \mathrm{d} . \mathrm{o.f.}=\frac{1}{N-1} \sum_{i=1}^{N}\left(\frac{m_{i}-\bar{m}}{\sigma_{i}}\right)^{2}
+\end{equation}
+
+This may be used to derive the probability that the variability is unlikely to be due to chance variations from a constant source \citep[e.g.,][]{McLaughlin:96:EGRETVariability}.
+
+\citet{Enoch:03:Variability} proposed a Robust Median Statistic:
+
+\begin{equation}
+\operatorname{RoMS}=(N-1)^{-1} \sum_{i=1}^{N} \frac{\left|m_{i}-\operatorname{median}\left(m_{i}\right)\right|}{\sigma_{i}}
+\end{equation}
+
+Excess variance $\sigma_{\mathrm{sys}}$ is sometimes used to capture the amount of variability not represented by stastical error bars \citep[e.g., in][]{2018PASP..130e4501B}:
+\begin{equation}
+\begin{aligned} \sigma_{\mathrm{sys}}^{2} & \equiv\left\langle\Delta m_{i}^{2}-\sigma_{\mathrm{stat}, i}^{2}\right\rangle \\ \Delta m_{i} & \equiv \frac{m_{i}-\bar{m}}{\sqrt{1-w_{i} / \sum w_{j}}} \\ w_{i} & \equiv \sigma_{\mathrm{stat}, i}^{-2} \\ \bar{m} & \equiv \frac{\sum w_{j} m_{j}}{\sum w_{j}} \end{aligned}
+\end{equation}
+
+The normalized excess variance can be calculated \citep[e.g.,][]{Nandra:97:AGNVarability,Allevato:13:AGNVariability} as: 
+\begin{equation}
+	\sigma_{\mathrm{sys,norm}}^2  \equiv \frac{\sigma_{\mathrm{sys}}^2} {N \bar{m}^2}
+\end{equation}
+
+\citet{Richards:12:ASASCatalog} compute a robust skew measure \texttt{gskew} designed for objects that rapidly decrease in brightness: 
+$$
+(\operatorname{med}(m)-\operatorname{med}(m[0 : p]))+(\operatorname{med}(m)-\operatorname{med}(m[p : 10))
+$$ 
+where $p = 0.03$.
+
+\citet{Kim:11:QSOVariability} calculate the number of objects above and below a variability threshold computed from the autocorrelation.
+They also calculate the ``range of a cumulative sum'' defined as
+
+\begin{equation}
+\begin{aligned} R_{\mathrm{cs}} &=\max (S)-\min (S) \\ S_{l} &=\frac{1}{N \sigma} \sum_{i=1}^{l}\left(m_{i}-\bar{m}\right). \end{aligned}
+\end{equation}
+They also compute the ratio of the standard deviation to the mean magnitude. 
+They adapt a \textit{Con} metric from \citet{Wozniak:00:Difference-Imag} that assesses how many sets of three consecutive data points are more than 2$\sigma$ outliers in the same direction.
+Finally they use the von Neumann ratio 
+\begin{equation}
+\eta=\frac{1}{(N-1) \sigma^{2}} \sum_{i=1}^{N-1}\left(m_{i+1}-m_{i}\right)^{2}
+\end{equation}
+which assesses the smoothness of a lightcurve by calculating the squared differences of consecutive points.
+
+\citet{Kim:14:The-EPOCH-Proje} proposed an alternative von Neumann ratio to account for unequal sampling:
+
+\begin{equation}
+\begin{array}{l}{\eta^{e}=\bar{\omega}\left(t_{N-1}-t_{1}\right)^{2} \frac{\sum_{i=1}^{N-1} w_{i}\left(m_{i+1}-m_{i}\right)^{2}}{\sigma^{2} \Sigma_{i=1}^{N-1} w_{i}}} \\ {w_{i}=\frac{1}{\left(t_{i+1}-t_{i}\right)^{2}}}.\end{array}
+\end{equation}
+
+\citet{Mowlavi:14:AbbeValue} discusses the Abbe value, $\mathcal{A} = \eta/2$, and performs a sliding window computation of it on sub-regions of the lightcurve.
+Comparing the mean of these subsample Abbe values $\mathcal{A}_{\mathrm{sub}}$ to that of the whole timeseries gives the ``excess Abbe value'':
+\begin{equation}
+\mathcal{E}_{\mathcal{A}} \equiv \overline{\mathcal{A}_{\mathrm{sub}}}-\mathcal{A}
+\end{equation}
+which can distinguish transient, pulsating, trended, and featureless lightcurves in the $\mathcal{E}_{\mathcal{A}}$ vs.\ $\mathcal{A}$ plane for 100-day window timescales.
+
+
+\citet{Kim:16:UPSILoN} computes the ratio of the squared sum of residuals above and below the median, which \citet{Jayasinghe:19:ASASSNVarsIII} reports is effective in identifying eclipsing binaries.
+They also include the Shapiro-Wilk statistic, which tests for normality.
+
+\citet{Tamuz:06:EBfitting} defines an ``alarm'' statistic for detecting runs on residuals $r_{i,j}$: 
+
+\begin{equation}
+\mathcal{A}_{\mathrm{alarm}}=\frac{1}{\chi^{2}} \sum_{i=1}^{M}\left(\frac{r_{i, 1}}{\sigma_{i, 1}}+\frac{r_{i, 2}}{\sigma_{i, 2}}+\cdots+\frac{r_{i, k}}{\sigma_{i, k_{i}}}\right)^{2}-\left(1+\frac{4}{\pi}\right)
+\end{equation}
+
+where $i$ denotes the $i$th ``run'' of consecutive residuals of the same sign and $j$ is the $j$th measurement in that run.
+This statistic is implemented in \texttt{VARTOOLS} for a constant model.
+\citet{Sokolovsky:17:VariabilityDetection} describes some related variants, including the $S_B$ variability statistic of \citet{ArellanoFerro:12:RRLyrDetection}.
+
+\citet{1996PASP..108..851S} developed an $L$ index which is a weighted product of the $J$ and $K$ indicies already included in our baseline feature set.
+\citet{Sokolovsky:17:VariabilityDetection} describes variants of the Welch-Stetson $I$ \citet{Welch:93:WelchStetson} and Stetson $J$, $K$, and $L$ indices which relax assumptions that the observations are taken in simultaneous pairs.
+% Welsch-Stetson I
+
+\texttt{tsfresh} includes a range of statistics for generic non-astronomical timeseries, including approximate entropy\footnote{\url{https://en.wikipedia.org/wiki/Approximate_entropy}}, which quantifies irregularity in timeseries data; various tests and measures of autocorrelation and nonstationarity; and number of mean crossings.
+
+\citet{Mislis:16:SIDRA} presents two features later adopted by \citet{Narayan:18:ANTARES}, an integral of the autocorrelation over all lags $\tau$:
+
+\begin{equation}
+  A_{1}=\left|\sum_{r=1}^{n}\left(\frac{1}{(n-\tau) \cdot \operatorname{rms}^{2}} \sum_{i=1}^{n=r}\left(x_{i}-\bar{x}\right)\left(x_{i+\tau}-\bar{x}\right)\right)\right|
+\end{equation}
+
+and a modification of the Shannon Entropy comparing the observed CDF of the data to a normal distribution.
+
+\citet{Sanchez-Saez:21:AlertClassification} computes a ``Mexican Hat Power Spectrum'' to assess the lightcurve variance at 10 and 100 day timescales.
+
+Many classes of accreting systems---especially AGN but also cataclysmic variables, X-ray binaries, and Young Stellar Objects---show stochastic variability.
+
+\citep[and references therein]{Kozowski:16:StructureFunction} describe the use of the Structure Function to capture the variability of the data as a function of lag time $\delta t$.
+This distribution may be characterized by a power-law index and a decorrelation timescale at which the Structure Function slope flattens into white noise.
+The authors caution about conflicting definitions and parameterizations of the Structure Function in the literature. % e.g. in Schmidt+10
+\citep{Hernitschek:16:PS1SF} uses Gaussian Processes to derive a multi-band Structure Function, while \citet{Hu:20:MultibandDRW} uses a Kalman filtering approach to determine the likelihood of a multi-band Damped Random Walk model with $O(k^3n)$ complexity.
+\citep{Graham:14:SlepianWavelets} proposes an alternative metric, the Slepian Wavelet Variance.
+A general family of Continuous Autoregressive Moving Average (CARMA) models can also be used to model the stochastic variability \citep[and references therein]{Moreno:19:AGNVariabilityHandbook}.
+\citet{Sanchez-Saez:21:AlertClassification} and \citet{De-Cicco:21:AGNSelection} included Damped Random Walk, Structure Function, and Irregular Autoregressive (CAR(1)) fits in their classification of ZTF alerts and VLT data, respectively.
+
+%\citet{Sanchez-Saez:19:LSQuestAGN} uses the Schmidt+10 amplitude/powerlaw definition
+
+Several distinct classes of astronomical sources show outbursts (or dips) relative to a quiescent magnitude; these include cataclysmic variables and other compact binaries, stellar flares, Young Stellar Objects, and AGN.
+The \textit{Lasair} broker uses exponential moving averages to detect outbursts (Roy Williams, priv.\ comm.):
+
+%The EMA can be defined as a recursion relation. If mag is the light curve, t is the detection time, and tp the previous detection time, then
+\begin{equation}
+  \begin{aligned}
+    EMA(t) & = f*EMA(t_p) + (1-f)*m(t) \\
+    f &= exp{-(t-t_p)/\tau}
+  \end{aligned}
+\end{equation}
+where $t_p$ is the previous detection time and $\tau$ is a timescale.  
+\textit{Lasair} uses $\tau$ values of  2 days, 8 days, and 28 days.
+Other approaches for detecting outbursts includes Bayesian Blocks \citep{Scargle:13:BayesianBlocks} and various prescriptions for detecting consecutive ``runs'' \citep[e.g.,][]{Chang:15:StellarFlares}.
+
+
+\subsubsection{Characterizing Multi-band Lightcurves}
+
+
+\citet{Kim:14:The-EPOCH-Proje} calculates quantiles and the von Neumann ratio on a $B-R$ color lightcurve derived from a survey with near-simultaneous multi-band measurements.
+
+\subsection{Characterization of Transients}
+
+While the boundary between transient events and aperiodic variability can be fuzzy, the baselined features from \citet{2011ApJ...733...10R} were derived solely for applications to variable stars.
+Rapid identification and classification of transients in the LSST alert stream will thus benefit from their own specialized features.
+We review here several transient classification approaches from the literature\footnote{From \url{https://www.kaggle.com/michaelapers/the-plasticc-astronomy-classification-demo} and \url{https://github.com/villrv/TransientClassifierTable}}.
+
+The redshift of the transient host galaxy is a key input for transient classification.
+LSST will not provide directly a single redshift for a given transient.
+Rather, each \DIAObject will include the IDs of the three nearest star-like and galaxy-like \Objects from the most recent LSST Data Release as well as the three nearest extended objects from a low-redshift galaxy catalog (\DPDD{}). 
+Science users or brokers can use these ids to obtain photometric redshifts from LSST Data Releases if they have Data Rights.
+An additional crossmatch to a low-redshift galaxy catalog is under study.
+\citeds{DMTN-049} discusses photometric redshifts in more detail.
+
+\subsubsection{Template and Model Fitting}
+
+Lightcurve fitting is common in transient classification.
+Some authors use software \citep[e.g.,][]{Jha:07:IaLCFitter,Kessler:09:SNANA,Sako:11:PSNid,Barbary:14:sncosmo,Guillochon:18:MOSFiT}
+to fit templates or models derived from observed transients \citep[e.g.,][]{Nugent:02:IaTemplates,Guy:07:SALT2, Conley:08:SiFTO, Kessler:19:PlasticcModels, Vincenzi:19:CCTemplates}.
+
+Others use analytic models meant to capture typical transient lightcurve shapes.
+
+\citet{Newling:11:SNPhotCCClassification} fit a parametric function with free parameters of explosion time, amplitude, relative rise and decay times, temporal stretch, and a tail decay function $\Psi(t)$:
+
+\begin{equation}
+  F(t)=A\left(\frac{t-\phi}{\sigma}\right)^{k} \exp \left(-\frac{t-\phi}{\sigma}\right) k^{-k} \mathrm{e}^{k}+\Psi(t).
+\end{equation}
+
+\citet{Bazin:11:SNLSIas} developed a parameterization with the goal of identifying SNe Ia:
+
+\begin{equation}
+  f^{k}(t)=A^{k} \frac{e^{-\left(t-t_{0}^{k}\right) / \tau_{f a l l}^{k}}}{1+e^{-\left(t-t_{0}^{k}\right) / \tau_{r i s e}^{k}}}+c^{k}.
+\end{equation}
+
+\citet{Karpenka:13:SNClassification} developed a generic parameterization that can fit double-peaked lightcurves:
+
+\begin{equation}
+f(t)=A\left[1+B\left(t-t_{1}\right)^{2}\right] \frac{e^{-\left(t-t_{0}\right) / T_{\text {fall }}}}{1+e^{-\left(t-t_{0}\right) / T_{\text {rise }}}}.
+\end{equation}
+
+\citet{Villar:19:Supernova-Photo} developed an analytic model for generic explosive transient lightcurves, including a plateau phase (but that does not capture the second peak in Type Ia SNe directly):
+
+\begin{equation}
+F=\left\{\begin{array}{ll}{\frac{A+\beta\left(t-t_{0}\right)}{1+e^{-\left(t-t_{0}\right) / \tau \operatorname{sise}}}} & {t<t_{1}} \\ {\frac{\left(A+\beta\left(t_{1}-t_{0}\right)\right) e^{-\left(t-t_{1}\right) / \tau_{\text {fall }}}}{1+e^{-\left(t_{0}-t_{0}\right) / \tau_{\text {rise }}}}} & {t \geq t_{1}}\end{array}\right.
+\end{equation}
+
+\citet{Sanchez-Saez:21:AlertClassification} modified the parametric model of \citet{Villar:19:Supernova-Photo} to smoothly transition between the two piecewise functions:
+
+\begin{equation}
+\begin{aligned}
+  F=& \frac{A\left(1-\beta^{\prime} \frac{t-t_{0}}{t_{1}-t_{0}}\right)}{1+\exp \left(-\frac{t-t_{0}}{\tau_{\text {rise }}}\right)} \cdot\left[1-\sigma\left(\frac{t-t_{1}}{3}\right)\right] \\
+  &+\frac{A\left(1-\beta^{\prime}\right) \exp \left(-\frac{t-t_{1}}{\tau_{\text {tall }}}\right)}{1+\exp \left(-\frac{t-t_{0}}{\tau_{\text {rise }}}\right)} \cdot\left[\sigma\left(\frac{t-t_{1}}{3}\right)\right]
+  \end{aligned}
+\end{equation}
+
+where $\sigma(t)$ is the sigmoid function.
+
+%Performing MCMC fits of this model to spectroscopically confirmed transients, they find using the fit model parameters directly in their classifier yields good performance.
+
+Microlensing events have characteristic shapes which can be fit using standard optimization algorithms.
+\texttt{VARTOOLS} implements a basic microlensing model from \citet{Wozniak:01:Microlensing}.
+
+Finally, some authors employ non-parametric models.
+\citet{Richards:12:SemiSupervisedSNe} and \citet{Ishida:13:PCASNClassification} used a nonparametric cubic spline.
+\citet{Varughese:15:SNPhotCC} and \citet{Lochner:16:SNPhotCC} decomposed the lightcurve using wavelets after mapping to a uniform temporal grid using cubic splines and Gaussian Processes, respectively.
+\citet{Revsbech:18:SNGP} used Gaussian Processes for data augmentation and \citet{Boone:19:AvocadoClassifier} introduced a Gaussian Process model for arbitrary transients that modeled both the temporal and spectral dimensions, enabling simultaneous multi-band fitting.
+For our purposes, the difficulty with nonparameteric representation is that they are difficult to represent compactly, although various features may be extracted from the nonparametric model \citep[e.g.,][]{Boone:19:AvocadoClassifier}.
+
+For explosive transients, key generic observables to capture include the slope of the rising and falling lightcurve, estimates of the source color, and estimates of the time of the peak.
+However, these may vary from band to band.
+In Wide-Fast-Deep the sparse sampling in individual filters may not provide enough points to perform fits in individual bands.
+Additionally, some form of interpolation may be required to estimate source color as a function of time depending on the distribution of filters within the adopted LSST cadence.
+
+Information about non-detections can also be important in understanding a transient's evolution and distinguishing it from other classes of source.
+\citet{Sanchez-Saez:21:AlertClassification} included several nondetection features in their ZTF alert classifier.
+
+\citet{Villar:20:SuperRAENN} trained an autoencoder to compress Gaussian-Process-interpolated supernova lightcurves into a low-dimensional latent space.  
+These features were then combined with per-band times to rise to peak, times to fall from peak, peak absolute magnitudes, median post-peak slope, and light-curve integral (each calculated from the interpolated GP lightcurves) to train a random-forest classifier.
+
+%model fitting or GPR type regression might enable features using residuals a la \citet{Dubath:11:VariableClassification}.
+
+%\subsubsection{Generic features}
+
+
+\section{Open Questions and Practical Concerns}
+
+In this section we highlight open issues that warrant further study.
+
+\subsection{AP and DRP Timeseries features}
+
+\textit{Should AP's \DIAObject features be the same as the DRP \DIAObject and \Object features, as assumed in the current baseline?}
+Without AP's latency requirements, more computationally expensive features (or simply more features) could be computed.
+DRP will compute features for the full LSST lightcurve, so features sensitive to more subtle signals could be valuable.
+
+AP timeseries features will not need to identify variable objects \citep[e.g.,][]{Pashchenko:18:OGLEClassification}, as in AP only objects that vary relative to the template image will produce \DIASources.
+In DRP, however, we will compute timeseries features on all \DIAObjects and \Objects regardless of their variability.
+
+Having disparate feature sets between AP and DRP could cause some user confusion, but our judgment is that this is a minor issue.
+We suggest that a larger set of features be contemplated for DRP (subject to sizing model considerations), but that they be a superset of those used for AP so that users can compare AP and DRP features that are common.
+
+
+\subsection{Multi-band features}
+
+Most timeseries features to date are computed on single-band timeseries data.
+The current baseline calls for LSST to compute single-band features independently on each LSST band.
+\textit{Are there new features we could develop that take advantage of LSST's sparse multi-band data?}
+Multi-band period fitting has already been developed.
+Model-dependent lightcurve fits could provide interpolated color estimates for transients.
+Are there other timeseries features that could be usefully generalized from their current single-band form?
+
+One option would be to perform single-band fitting when there are enough data points to warrant it, and to fall back to multi-band fitting in other cases.
+The disadvantage to this approach is that it is wasteful from a storage perspective (the same fit is duplicated over six per-band columns).
+
+
+\subsection{Number of data points}
+
+When a new \DIAObject is identified in AP, it will only have one \DIASource.
+\textit{Are there threshold numbers of epochs (per band) we should require before computing some timeseries features?}
+Even basic statistics like the mean require 2--3 points to provide information, and more complex features like period finding need tens of epochs.
+Since many false positives will only have a few detections, omitting them from feature computation would provide savings.
+
+We propose to empirically determine the minimum numbers of \DIASources required to obtain meaningful results for various features.
+Features not computed will have values set to \texttt{NULL}.
+
+\subsubsection{Period finding}
+
+The LSST main survey has 825 fiducial visits per pointing, divided among six bands.  
+In AP, the number of epochs available for period fitting in a single band using the 12 month \DIASource history (10--30) is at the very lower limit of what is needed for effective period fitting.  
+This suggests that a multi-band period fit will be required for AP.
+
+DRP will fit timeseries features using the entire \DIASource history, so after several years of the survey single-band period finding could be effective.
+Are there astrophysical sources where we expect the period to differ by band, or where the assumptions of multi-band period fitting will break down?
+
+DRP will see some sources where the period may change over the lifetime of LSST.
+Are there enough sources where this is a problem to justify limiting the temporal range of data input to period finding?
+
+
+\subsection{Model Fitting}
+
+Fits to theoretical models for a wide variety of transients, variables, and moving objects can provide great insight into their astrophysics.
+Models of supernovae, other transients, microlensing events, eclipsing binaries, spotted stars, stellar flares, and more are widely applied in the literature.
+
+\textit{Should LSST perform science-specific model fits?}
+
+We argue that in general these fits are better done by science users on self-selected subsamples of the LSST data rather than as part of generic feature computation on all \DIAObjects and \Objects.
+First, the very nature of the models is that they are only meaningful for a small subset of the total number of objects LSST has data for; even identifying the relevant subset requires classification which is beyond LSST scope.  
+Additionally, model fitting is typically computationally expensive, and is unlikely to be compatible with the 60-second alert latency budget.
+Moreover, it is not clear there is sufficient space to store all of the resulting best-fit model parameters, their uncertainties, and the goodness of fit.
+Finally, the choice of models to fit, their parameter constraints, and so on are best left to specialists.
+
+Accordingly, we recommend features that characterize broad classes of generic events: e.g., the rise time of a transient calculated from a nonparametric fit rather than a SALT2 SN Ia template.
+
+
+\subsection{Solar System Object Features}
+
+The schema proposed in RFC 620 for the \SSObject catalog allocates the same amount of space for periodic 
+%and \textbf{TBC} nonperiodic 
+features as for \DIAObjects.
+From a code reuse perspective, having the same set of features for both \DIAObjects and \SSObjects is simple.
+However, it is not obvious that features developed for transients and AGN are useful to compute on \SSObjects.
+
+Additionally, we note that for the features to be useful for \SSObjects they should be computed on phase-corrected \texttt{SSSource} data points rather than the original \DIASources.
+
+\subsection{Interpretability} \label{sec:interpretability}
+
+All of the timeseries features computed will be available for user query.
+This suggests that we prefer features that are more intelligible to humans where possible, in order to aid in construction of appropriate queries and filters.
+We expect that the highest-performance machine-learning classifiers will work directly on the data products themselves rather than on the precomputed features, so feature interpretability is more valuable than performance in a hypothetical classifier.
+
+\subsection{Storage}
+
+We have budgeted for floats, but most statistics don't have or need many digits of floating point precision.
+We could cast some features as integers either to save space or to make room for additional features.
+However, this conversion is lossy and imposes an additional usability burden on users, who must remember when and how to convert any fields to floating point\footnote{or use a provided convenience function}.
+Additionally the range of the feature must be well-understood to prevent overflows.
+
+\subsection{Compute features of flux or magnitudes?}
+
+Most optical classification programs in the literature have featurized lightcurves reported in magnitudes.
+Given the complications magnitudes impose with negative detections (which will be common in the forced photometry table, for instance) we will compute our features in flux space.
+It is worth noting that for some features this may lead to altered behavior compared to the literature; we should ensure that the statistical sense of the features we compute is preserved. 
+
+\subsection{Difference or total flux?} \label{sec:totFlux}
+
+Each \DIASource has multiple flux measurements associated with it.  
+The most important values are \texttt{psFlux}, the point-source flux measured on the difference image, and \texttt{totFlux}, a \textit{forced} PSF flux measured at the \DIASource centroid on the calibrated (unsubtracted) visit image.
+Different science cases may require that distinct timeseries features be calculated on lightcurves built from different fluxes.
+Features that try to capture the rise time of a supernovae will obviously use a \texttt{psFlux} lightcurve, as there is no relevant flux in the template.
+For a periodogram of a variable star, however, the total flux including the flux in the reference may be more appropriate.
+
+It may be suggested that computing timeseries features on fluxes rather than on magnitudes makes this distinction irrelevant.  
+However, since the templates used for subtraction are updated in every data release, this means that the range of \texttt{psFlux} values for variable stars will change with the images used in the templates.  
+This will create jumps when AP processing switches to new templates after each data release.
+These offsets are different for each variable object because their phases and flux levels are uncorrelated.
+Section \ref{sec:template_change} discusses some possible mitigations.
+
+It may be preferable to compute variable star features on the forced photometry measurement (\texttt{totFlux}) on the Processed Visit Image, which would provide the correct absolute flux values no matter the template\footnote{The Alerce ZTF alert classifier described in \citet{Sanchez-Saez:21:AlertClassification} uses a total flux estimate for its variable star features.  
+As ZTF forced photometry measurements are not available, they use the sum of the difference flux and the template flux of the spatially coincident template source, if such a source exists.}. 
+However, these measurements will be less reliable in crowded fields, and they are susceptible to centroid errors in the triggering \DIASource.
+
+
+\subsection{Compute AP features using Forced Photometry?}
+
+LSST obtains several kinds of forced photometry measurements during Alert Production.
+When a new \DIAObject is created, ``precovery'' forced photometry is obtained for any images at that position observed in the past 30 days.
+And each time a field is observed, LSST will compute forced photometry at the positions of all overlapping \DIAObjects that have been detected in the last 12 months.
+In both cases forced photometry is performed both on the difference image and the unsubtracted processed visit image, so the discussion in \S \ref{sec:totFlux} also applies to forced photometry.
+
+\textit{Should we use forced photometry measurements (either on difference images or PVIs) to compute timeseries features in AP?}
+If we only compute features when \DIASources are detected, variable star photometry will be highly biased, as no \DIASources will be present when the variable star flux is near the template value.
+However, PSF forced photometry fluxes are sensitive to centroiding errors, whether due to bad image subtractions or errors in modeling proper motion.
+Moreover, for objects that have faded significantly many forced photometry measurements will simply record zero flux with background noise, which could dilute the signal for some features.
+\citet{Sanchez-Saez:21:AlertClassification} achieved reasonable performance in classifying variable stars from ZTF alerts despite the absence of forced photometry measurements.
+
+There is also a subtlety in interpreting the alert contents.
+Alerts are only triggered by \DIASource \textit{detections}, but if we use forced photometry lightcurves for timeseries features the latest measurement will not be identical to the triggering \DIASource.
+Also, \DIAObjects would require updating each time a new forced photometery measurement was made, which is not in the current processing plan.
+
+If we did decide that we wanted to update \DIAObject features with forced photometry results (and no triggering \DIASource) we could do so in a more leisurely way---these would be subject to L1PublicT rather than OTT1 requirements.
+
+In DRP uniform forced photometry lightcurves will be available for all \Objects and \DIAObjects, so it will make sense to use these to compute the timeseries features.
+
+\subsection{Times}
+
+Period-finding and other computations for short-timescale events can be biased by light-travel time across the solar system.
+Accordingly our feature computation should should use barycentered times.  
+Pipelines will natively report TAI times.
+\textit{Should we also store the barycentered times in the \DIASource record?}
+The transformation is straightforward to compute; however, if the barycentered time is omitted users will have to recognize that they cannot reproduce our features without first computing the barycentered times.
+
+\subsection{Special Programs}
+
+Observations of Special Programs might benefit from different timeseries features to capitalize on the potential changes in image characteristics, time sampling, and total number of observations.
+\textit{Would special programs benefit from unique timeseries features, and could this be accommodated technically?}
+As discussed in \citeds{DMTN-065}, Special Programs data will be processed using the same algorithms used for data from the main survey, but the algorithms can be reconfigured.
+In practice this might mean adding additional frequencies to a Lomb-Scargle periodogram computation, for example, but not adding entirely new classes of model fits.
+
+%cf. DM-12581 discussion
+
+\subsection{Changing Templates} \label{sec:template_change}
+
+AP expects to change templates after each major data release, both to improve the quality of the templates and to minimize false detections due to objects with larger proper motion.
+Template changes will introduce offsets in the difference fluxes for most objects.
+As we expect Data Releases will occur roughly annually, and we compute lightcurve histories in Alert Production on twelve months of data, this means that there will always be a template offset present in our feature computation.
+
+There are a range of possible solutions to this problem. 
+We could determine offsets for all \DIAObjects by processing the same science exposures with the new and old templates and measuring the change in the \DIASource flux, but it is unclear how reliable this procedure would be in practice.
+A more robust possibility for deriving the offset would be to conduct forced photometry at the \DIAObject locations in the old and new templates and difference their fluxes, or to difference the old and new templates and perform forced photometry at the \DIAObject locations on the difference of the templates.
+In either case it would be necessary to apply these offsets consistently and transparently during feature computation for twelve months, before they would be superceded by new values after the next data release.  
+
+
+\subsection{Evaluation}
+
+Given the options and questions above, 
+\textit{how can we choose which features to implement?}
+
+Superficially, a large-scale data challenge seems like an appealing way to find the ``best'' features.
+However, as discussed in \S \ref{sec:interpretability}, raw performance by machine-learning classifiers is not the only goal for these features, since they are also used by humans to write queries and alert filters.
+Additionally, there is no truly LSST-like dataset in existence today to conduct the data challenge on, and the most realistic simulation effort to date (PLaSTICC) only simulated a subset of the wide-ranging event classes LSST will see.
+Finally, there is no effort available in the LSST construction project to support such an effort, and it is unclear that communitity members are prepared to undertake such a large project without substantial financial support.
+
+Accordingly we suggest using this document as a starting point and a respository for discussion with the LSST Science Collaborations, and will include the evolving proposed feature set below as an appendix.
+We suggest that comunity-developed simulations and precursor survey data be used to scientifically validate the features proposed here and their implementation, instead of using them in a data challenge format to actually \textit{select} the features. 
+
+Concretely, we suggest that the Project personnel, in coordination with members of the Science Collaborations, use a limited set of \textit{fiducial} object classes, simulated on the baseline cadence, to tune the proposed feature set (e.g., determining the number of period frequencies and harmonics that may be successfully fit; identifying threshold numbers of epochs needed for some features).
+Broad community validation of the features would occur during the Data Previews (although the temporal baseline and cadences will not match that expected during the full survey).
+
+A relevant and open question is, \textit{Will LSST compute the same features over the ten year survey?}
+Maintaining the same feature set provides continuity and simplies the continuously-updated PPDB.
+However, it requires us to correctly develop the LSST feature set before having seen any LSST data, which seems difficult.
+One option would be to only use a portion of the allocated space in the early survey, so that additional features could be added in later years of operations without removing features previously calculated.
+
+\section{Recommendations}
+
+Here we summarize the questions listed above and our recommendations.
+
+\subsection{Periodic Features}
+
+Since LSST images are spread among six filters, we expect that best results will be achieved by using a multi-band period search technique.
+We recommend providing an Adaptive Fourier Decomposition rather than a nonparameteric period estimate, as the Fourier parameters may be used to identify variable types.
+
+We will include an analytic estimate of the False Alarm Probability \citep[e.g.,][]{Baluev:08:FAP, Delisle:20:LSFAPCorrelatedNoise} and goodness of fit measures.
+
+\subsection{Aperiodic Features}
+
+For flexibility, we recommend storing raw percentiles rather than combinations thereof---if desired, user-defined functions may be provided to simply computations (e.g., of the 5\%--95\% amplitude).
+
+We recommend use of robust statistics where possible due to the unavoidable presence of outliers.
+We will investigate the tradeoffs in identifying and potentially excluding outliers from some statistics \citep[e.g.,][]{Pashchenko:18:OGLEClassification}.
+
+To provide useful features for the widest range of transient and variable objects, we should include measures of stochastic variability and transient characterization.
+Given the wide scientific community which uses these features, generic characterization of transients will be more broadly useful than detailed models specializes for individual transient types.
+
+\section{Proposed Feature Set} \label{sec:proposed_features}
+
+\textbf{To be determined after consultation with the science community.}
+
+A draft proposal for features can be found at \url{https://ls.st/fkr}.
+It will be incorporated into this technote after an initial phase of community feedback.
+
+\section{User Interfaces to Timeseries Data} \label{sec:API}
+
+Users will access LSST timeseries data via ADQL queries through the Science Platform's VO APIs.
+Concretely, they will receive \texttt{VOTables} of \DIAObjects, \DIASources, etc.
+Depending on the parameters of the query (e.g., a large spatial cone search), multiple distinct astrophysical objects may be included in the response.
+It will be the user's responsibility to handle multiple distinct returned objects appropriately.
+
+In Python environments such as the Science Platform's Notebook aspect, the \texttt{pyVO} package can be used to transform the returned VOTable into \texttt{astropy} \texttt{Tables}.
+
+The Rubin Obsevatory pipelines that compute timeseries features do not do so on \texttt{VOTables} or \texttt{astropy} \texttt{Tables}.
+Accordingly, to re-run the timeseries feature computation code on data returned by user queries it will be necessary to translate the results into the appropriate pipeline-internal representations.
+We expect to provide basic user tutorials for converting query payloads back into these internal data structures.
+Thus we expect users to be able to functionally reproduce our feature computations by running the feature code in the Science Platform on data returned from TAP queries. 
+
+We do not plan at this time to develop or deploy a ``Timeseries object'' abstraction.
+We note that similar efforts are underway in astropy and the VO, and we are continuing to monitor those developments.
 
 \appendix
 % Include all the relevant bib files.

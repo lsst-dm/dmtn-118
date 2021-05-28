@@ -183,8 +183,8 @@ In sum, these considerations motivate us to look for a set of timeseries feature
 
 In this section we review a range of other timeseries features that have been used in the literature.
 While it is impossible for this list to be exhaustive we have attempted to review the papers for major classification efforts and packages.
-These included classification of ASAS \citep{Richards:12:ASASCatalog}, ASAS-SN \citep{Jayasinghe:18:ASASSNVarsI,Jayasinghe:19:ASASSNVarsII,Jayasinghe:19:ASASSNVarsIII,Jayasinghe:19:ASASSNVarsV}, PS1\citep{Hernitschek:16:PS1SF, tmp_Villar:20:SuperRAENN}, HiTS \citep{Martinez:18:THE-HIGH-CADENC}, VVV \citep{Elorrieta:16:A-machine-learn}, SNPhotCC \citep{Kessler:10:SNPhotCC}, the ANTARES broker \citep{Narayan:18:ANTARES}, the PLAsTiCC challenge \citep{2018arXiv180911145M,Kessler:19:PlasticcModels, Boone:19:AvocadoClassifier}, OGLE \citep{Pashchenko:18:OGLEClassification}, and ZTF \citep{Sanchez-Saez:21:AlertClassification, tmp_Coughlin:20:ZTFClassification}. 
-We also reviewed existing packages for featurizing lightcurves, including \texttt{VARTOOLS} \citep{Hartman:16:VARTOOLS}, \texttt{FATS} \citep{Nun:15:FATS}, \texttt{cesium}\footnote{\url{http://cesium-ml.org/}}, \texttt{UPSILoN} \citep{Kim:16:UPSILoN}, \texttt{VaST} \citep{Sokolovsky:17:VaST}, \texttt{astrobase}\footnote{\url{https://astrobase.readthedocs.io}} and \texttt{tsfresh}\footnote{\url{https://tsfresh.readthedocs.io/}}.
+These included classification of ASAS \citep{Richards:12:ASASCatalog}, ASAS-SN \citep{Jayasinghe:18:ASASSNVarsI,Jayasinghe:19:ASASSNVarsII,Jayasinghe:19:ASASSNVarsIII,Jayasinghe:20:ASASSNVarsV}, PS1\citep{Hernitschek:16:PS1SF, Villar:20:SuperRAENN}, HiTS \citep{Martinez-Palomera:18:HiTS}, VVV \citep{Elorrieta:16:A-machine-learn}, SNPhotCC \citep{Kessler:10:SNPhotCC}, the ANTARES broker \citep{Narayan:18:ANTARES}, the PLAsTiCC challenge \citep{Malz:19:PLAsTiCC,Kessler:19:PlasticcModels, Boone:19:AvocadoClassifier}, OGLE \citep{Pashchenko:18:OGLEClassification}, and ZTF \citep{Sanchez-Saez:21:AlertClassification, tmp_Coughlin:20:ZTFClassification}. 
+We also reviewed existing packages for featurizing lightcurves, including \texttt{VARTOOLS} \citep{Hartman:16:VARTOOLS}, \texttt{FATS} \citep{Nun:15:FATS}, \texttt{cesium}\footnote{\url{http://cesium-ml.org/}}, \texttt{UPSILoN} \citep{Kim:16:UPSILoN}, \texttt{VaST} \citep{Sokolovsky:18:VaST}, \texttt{astrobase}\footnote{\url{https://astrobase.readthedocs.io}} and \texttt{tsfresh}\footnote{\url{https://tsfresh.readthedocs.io/}}.
 
 We attempt to combine related or redundant expressions of the same calculations below.
 \citet{Graham:17:VariableClassificationChallenges} provides a useful taxonomy of features, suggesting that they may characterize location, scale, variability, morphology, timescales, trends, or agreement with a model. 
@@ -420,10 +420,10 @@ We review here several transient classification approaches from the literature\f
 
 The redshift of the transient host galaxy is a key input for transient classification.
 LSST will not provide directly a single redshift for a given transient.
-Rather, each \DIAObject will include the IDs of the three nearest star-like and galaxy-like \Objects from the most recent LSST Data Release. 
+Rather, each \DIAObject will include the IDs of the three nearest star-like and galaxy-like \Objects from the most recent LSST Data Release as well as the three nearest extended objects from a low-redshift galaxy catalog (\DPDD{}). 
 Science users or brokers can use these ids to obtain photometric redshifts from LSST Data Releases if they have Data Rights.
 An additional crossmatch to a low-redshift galaxy catalog is under study.
-\citedsp{DMTN-049} discusses photometric redshifts in more detail.
+\citeds{DMTN-049} discusses photometric redshifts in more detail.
 
 \subsubsection{Template and Model Fitting}
 
@@ -487,7 +487,7 @@ Additionally, some form of interpolation may be required to estimate source colo
 Information about non-detections can also be important in understanding a transient's evolution and distinguishing it from other classes of source.
 \citet{Sanchez-Saez:21:AlertClassification} included several nondetection features in their ZTF alert classifier.
 
-\citet{tmp_Villar:20:SuperRAENN} trained an autoencoder to compress Gaussian-Process-interpolated supernova lightcurves into a low-dimensional latent space.  
+\citet{Villar:20:SuperRAENN} trained an autoencoder to compress Gaussian-Process-interpolated supernova lightcurves into a low-dimensional latent space.  
 These features were then combined with per-band times to rise to peak, times to fall from peak, peak absolute magnitudes, median post-peak slope, and light-curve integral (each calculated from the interpolated GP lightcurves) to train a random-forest classifier.
 
 %model fitting or GPR type regression might enable features using residuals a la \citet{Dubath:11:VariableClassification}.
@@ -518,7 +518,7 @@ Most timeseries features to date are computed on single-band timeseries data.
 The current baseline calls for LSST to compute single-band features independently on each LSST band.
 \textit{Are there new features we could develop that take advantage of LSST's sparse multi-band data?}
 Multi-band period fitting has already been developed.
-Model-dependent lightcurve fits could provided interpolated color estimates for transients.
+Model-dependent lightcurve fits could provide interpolated color estimates for transients.
 Are there other timeseries features that could be usefully generalized from their current single-band form?
 
 One option would be to perform single-band fitting when there are enough data points to warrant it, and to fall back to multi-band fitting in other cases.
@@ -556,7 +556,7 @@ Models of supernovae, other transients, microlensing events, eclipsing binaries,
 \textit{Should LSST perform science-specific model fits?}
 
 We argue that in general these fits are better done by science users on self-selected subsamples of the LSST data rather than as part of generic feature computation on all \DIAObjects and \Objects.
-First, the very nature of the models is that they are only meaningful for a small subset of the total number of objects LSST has data for.  
+First, the very nature of the models is that they are only meaningful for a small subset of the total number of objects LSST has data for; even identifying the relevant subset requires classification which is beyond LSST scope.  
 Additionally, model fitting is typically computationally expensive, and is unlikely to be compatible with the 60-second alert latency budget.
 Moreover, it is not clear there is sufficient space to store all of the resulting best-fit model parameters, their uncertainties, and the goodness of fit.
 Finally, the choice of models to fit, their parameter constraints, and so on are best left to specialists.
@@ -645,7 +645,8 @@ The transformation is straightforward to compute; however, if the barycentered t
 
 Observations of Special Programs might benefit from different timeseries features to capitalize on the potential changes in image characteristics, time sampling, and total number of observations.
 \textit{Would special programs benefit from unique timeseries features, and could this be accommodated technically?}
-As discussed in \citeds{DMTN-065}, the baseline is to process Special Programs data identically when it is possible for DM to do so. 
+As discussed in \citeds{DMTN-065}, Special Programs data will be processed using the same algorithms used for data from the main survey, but the algorithms can be reconfigured.
+In practice this might mean adding additional frequencies to a Lomb-Scargle periodogram computation, for example, but not adding entirely new classes of model fits.
 
 %cf. DM-12581 discussion
 
